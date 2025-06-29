@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="com.obiscr.chatgpt.settings.EasyCodeState">
+    <option name="projectFiles" value="$PROJECT_DIR$/src/main/java/com/csharma/listener/EnableKinesis.java;/Users/chaitanyasharma1989/Documents/Workspace/AdapterX-Kinesis/src/main/java/com/csharma/listener/KinesisListener.java;/Users/chaitanyasharma1989/Documents/Workspace/AdapterX-Kinesis/src/main/java/com/csharma/prpoerties/KinesisProperties.java;/Users/chaitanyasharma1989/Documents/Workspace/AdapterX-Kinesis/src/main/java/com/csharma/App.java;/Users/chaitanyasharma1989/Documents/Workspace/AdapterX-Kinesis/src/main/java/com/csharma/KinesisAutoConfiguration.java;/Users/chaitanyasharma1989/Documents/Workspace/AdapterX-Kinesis/src/main/java/com/csharma/KinesisConsumerManager.java;/Users/chaitanyasharma1989/Documents/Workspace/AdapterX-Kinesis/src/main/java/com/csharma/KinesisTemplate.java;/Users/chaitanyasharma1989/Documents/Workspace/AdapterX-Kinesis/src/test/java/com/csharma/AppTest.java" />
+  </component>
+</project>

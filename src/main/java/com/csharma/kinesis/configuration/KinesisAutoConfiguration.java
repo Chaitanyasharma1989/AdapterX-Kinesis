@@ -1,0 +1,23 @@
+package com.csharma.kinesis;
+
+import com.csharma.kinesis.prpoerties.KinesisProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@EnableConfigurationProperties(KinesisProperties.class)
+@ConditionalOnProperty(prefix = "kinesis", name = "enabled", havingValue = "true", matchIfMissing = true)
+public class KinesisAutoConfiguration {
+
+    @Bean
+    public KinesisTemplate kinesisTemplate() {
+        return new KinesisTemplate();
+    }
+
+    @Bean
+    public KinesisConsumerManager kinesisConsumerManager() {
+        return new KinesisConsumerManager();
+    }
+}
