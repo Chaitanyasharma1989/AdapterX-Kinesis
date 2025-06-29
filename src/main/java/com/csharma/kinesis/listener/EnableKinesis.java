@@ -1,4 +1,4 @@
-package com.csharma.listener;
+package com.csharma.kinesis.listener;
 
 import java.lang.annotation.*;
 

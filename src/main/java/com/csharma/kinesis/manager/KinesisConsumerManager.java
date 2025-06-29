@@ -1,33 +1,30 @@
-package com.csharma;
+package com.csharma.kinesis.manager;
 
-
-
-import com.csharma.listener.KinesisListener;
-import com.csharma.prpoerties.KinesisProperties;
+import com.csharma.kinesis.listener.KinesisListener;
+import com.csharma.kinesis.prpoerties.KinesisProperties;
+import com.csharma.kinesis.recordprocessor.RecordProcessorFactory;
+import com.csharma.kinesis.service.CrossAccountCredentialsService;
+import com.csharma.kinesis.service.SchemaRegistryService;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
-import software.amazon.kinesis.coordinator.Scheduler;
-import software.amazon.kinesis.coordinator.SchedulerConfig;
-import software.amazon.kinesis.processor.ShardRecordProcessor;
-import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
-import software.amazon.kinesis.retrieval.KinesisClientRecord;
-import software.amazon.kinesis.retrieval.polling.PollingConfig;
-import software.amazon.kinesis.common.ConfigsBuilder;
-import software.amazon.kinesis.common.KinesisClientUtil;
-import software.amazon.kinesis.common.InitialPositionInStream;
-import software.amazon.kinesis.lifecycle.events.*;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.*;
+import software.amazon.kinesis.common.ConfigsBuilder;
+import software.amazon.kinesis.common.KinesisClientUtil;
+import software.amazon.kinesis.coordinator.Scheduler;
+import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
+import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.lang.reflect.Method;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -44,21 +41,30 @@ public class KinesisConsumerManager {
     @Autowired
     private KinesisProperties kinesisProperties;
 
+    @Autowired
+    private CrossAccountCredentialsService crossAccountCredentialsService;
+
+    @Autowired
+    private SchemaRegistryService schemaRegistryService;
+
     private final Map<String, Scheduler> schedulers = new ConcurrentHashMap<>();
+    private final Map<String, String> consumerArns = new ConcurrentHashMap<>();
     private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private KinesisAsyncClient kinesisClient;
 
     @PostConstruct
     public void init() {
+        Region region = Region.of(kinesisProperties.getRegion());
+        this.kinesisClient = KinesisClientUtil.createKinesisAsyncClient(
+                KinesisAsyncClient.builder().region(region));
         scanForKinesisListeners();
     }
 
     private void scanForKinesisListeners() {
         String[] beanNames = applicationContext.getBeanDefinitionNames();
-
         for (String beanName : beanNames) {
             Object bean = applicationContext.getBean(beanName);
             Method[] methods = bean.getClass().getMethods();
-
             for (Method method : methods) {
                 KinesisListener annotation = method.getAnnotation(KinesisListener.class);
                 if (annotation != null) {
@@ -72,41 +78,103 @@ public class KinesisConsumerManager {
         String streamName = annotation.streamName();
         String applicationName = annotation.applicationName().isEmpty() ?
                 "kinesis-consumer-" + streamName : annotation.applicationName();
+        boolean useEFO = annotation.enhancedFanOut() || kinesisProperties.getConsumer().getEnhancedFanOut().isEnabled();
+
+        // Check if cross-account configuration is needed
+        boolean isCrossAccount = isCrossAccountConfiguration(annotation);
+
+        // Check if schema validation is needed
+        boolean isSchemaValidation = isSchemaValidationConfiguration(annotation);
 
         try {
             Region region = Region.of(kinesisProperties.getRegion());
-            KinesisAsyncClient kinesisClient = KinesisClientUtil.createKinesisAsyncClient(
-                    KinesisAsyncClient.builder().region(region));
-            DynamoDbAsyncClient dynamoClient = DynamoDbAsyncClient.builder().region(region).build();
-            CloudWatchAsyncClient cloudWatchClient = CloudWatchAsyncClient.builder().region(region).build();
 
-            ConfigsBuilder configsBuilder = new ConfigsBuilder(streamName, applicationName, kinesisClient,
-                    dynamoClient, cloudWatchClient, applicationName, new RecordProcessorFactory(bean, method));
+            // Get appropriate credentials for cross-account or same-account
+            AwsCredentialsProvider credentialsProvider = getCredentialsProvider(annotation);
 
-            PollingConfig pollingConfig = new PollingConfig(streamName, kinesisClient);
-            pollingConfig.maxRecords(annotation.maxRecords());
-            pollingConfig.idleTimeBetweenReadsInMillis(annotation.idleTimeBetweenReadsInMillis());
+            // Initialize schema registry service if needed
+            if (isSchemaValidation) {
+                schemaRegistryService.initialize(credentialsProvider);
+            }
 
-            SchedulerConfig schedulerConfig = configsBuilder.schedulerConfig()
-                    .schedulerConfig()
+            // Create clients with appropriate credentials
+            DynamoDbAsyncClient dynamoClient = DynamoDbAsyncClient.builder()
+                    .region(region)
+                    .credentialsProvider(credentialsProvider)
                     .build();
 
-            Scheduler scheduler = new Scheduler(
-                    configsBuilder.checkpointConfig(),
-                    configsBuilder.coordinatorConfig(),
-                    configsBuilder.leaseManagementConfig(),
-                    configsBuilder.lifecycleConfig(),
-                    configsBuilder.metricsConfig(),
-                    configsBuilder.processorConfig(),
-                    configsBuilder.retrievalConfig().retrievalSpecificConfig(pollingConfig)
+            CloudWatchAsyncClient cloudWatchClient = CloudWatchAsyncClient.builder()
+                    .region(region)
+                    .credentialsProvider(credentialsProvider)
+                    .build();
+
+            // Create Kinesis client for this specific consumer
+            KinesisAsyncClient consumerKinesisClient = KinesisAsyncClient.builder()
+                    .region(region)
+                    .credentialsProvider(credentialsProvider)
+                    .build();
+
+            // Create record processor factory with schema validation if enabled
+            RecordProcessorFactory recordProcessorFactory = createRecordProcessorFactory(
+                    bean, method, annotation, isSchemaValidation
             );
 
-            schedulers.put(streamName, scheduler);
+            ConfigsBuilder configsBuilder = new ConfigsBuilder(streamName,
+                    applicationName,
+                    consumerKinesisClient,
+                    dynamoClient,
+                    cloudWatchClient,
+                    applicationName,
+                    recordProcessorFactory);
 
-            // Start the scheduler in background
+            Scheduler scheduler;
+
+            if (useEFO) {
+                String consumerName = annotation.consumerName().isEmpty() ? applicationName + "-efo-consumer" : annotation.consumerName();
+                String consumerArn = createOrGetEnhancedFanOutConsumer(streamName, consumerName, consumerKinesisClient);
+                consumerArns.put(streamName + "-" + consumerName, consumerArn);
+
+                FanOutConfig fanOutConfig = new FanOutConfig(consumerKinesisClient)
+                        .streamName(streamName)
+                        .applicationName(applicationName)
+                        .consumerArn(consumerArn);
+
+                scheduler = new Scheduler(
+                        configsBuilder.checkpointConfig(),
+                        configsBuilder.coordinatorConfig(),
+                        configsBuilder.leaseManagementConfig(),
+                        configsBuilder.lifecycleConfig(),
+                        configsBuilder.metricsConfig(),
+                        configsBuilder.processorConfig(),
+                        configsBuilder.retrievalConfig().retrievalSpecificConfig(fanOutConfig)
+                );
+
+                log.info("Created Enhanced Fan-Out consumer for stream: {} with consumer ARN: {} (Cross-account: {}, Schema validation: {})",
+                        streamName, consumerArn, isCrossAccount, isSchemaValidation);
+            } else {
+                PollingConfig pollingConfig = new PollingConfig(streamName, consumerKinesisClient);
+                pollingConfig.maxRecords(annotation.maxRecords());
+                pollingConfig.idleTimeBetweenReadsInMillis(annotation.idleTimeBetweenReadsInMillis());
+
+                scheduler = new Scheduler(
+                        configsBuilder.checkpointConfig(),
+                        configsBuilder.coordinatorConfig(),
+                        configsBuilder.leaseManagementConfig(),
+                        configsBuilder.lifecycleConfig(),
+                        configsBuilder.metricsConfig(),
+                        configsBuilder.processorConfig(),
+                        configsBuilder.retrievalConfig().retrievalSpecificConfig(pollingConfig)
+                );
+
+                log.info("Created standard polling consumer for stream: {} (Cross-account: {}, Schema validation: {})",
+                        streamName, isCrossAccount, isSchemaValidation);
+            }
+
+            schedulers.put(streamName, scheduler);
             executorService.submit(() -> {
                 try {
-                    log.info("Starting Kinesis consumer for stream: {}", streamName);
+                    log.info("Starting Kinesis consumer for stream: {} (EFO: {}, Cross-account: {}, Schema validation: {})",
+                            streamName, useEFO, isCrossAccount, isSchemaValidation);
                     scheduler.run();
                 } catch (Exception e) {
                     log.error("Error running Kinesis consumer for stream: {}", streamName, e);
@@ -118,92 +186,166 @@ public class KinesisConsumerManager {
         }
     }
 
-    private static class RecordProcessorFactory implements ShardRecordProcessorFactory {
-        private final Object bean;
-        private final Method method;
+    private RecordProcessorFactory createRecordProcessorFactory(Object bean, Method method,
+                                                                KinesisListener annotation, boolean isSchemaValidation) {
+        if (isSchemaValidation) {
+            String schemaRegistryName = annotation.schemaRegistryName().isEmpty() ?
+                    kinesisProperties.getSchemaRegistry().getRegistryName() : annotation.schemaRegistryName();
+            String schemaName = annotation.schemaName().isEmpty() ?
+                    kinesisProperties.getSchemaRegistry().getSchemaName() : annotation.schemaName();
+            String schemaVersion = annotation.schemaVersion().isEmpty() ?
+                    kinesisProperties.getSchemaRegistry().getSchemaVersion() : annotation.schemaVersion();
+            String dataFormat = annotation.dataFormat();
+            boolean failOnValidationError = annotation.failOnValidationError();
 
-        public RecordProcessorFactory(Object bean, Method method) {
-            this.bean = bean;
-            this.method = method;
-        }
-
-        @Override
-        public ShardRecordProcessor shardRecordProcessor() {
-            return new RecordProcessor(bean, method);
+            return new RecordProcessorFactory(
+                    bean, method, kinesisProperties.getConsumer().getThreadPool().getSize(),
+                    schemaRegistryService, true, schemaRegistryName, schemaName, schemaVersion,
+                    dataFormat, failOnValidationError
+            );
+        } else {
+            return new RecordProcessorFactory(bean, method, kinesisProperties.getConsumer().getThreadPool().getSize());
         }
     }
 
-    private static class RecordProcessor implements ShardRecordProcessor {
-        private static final Logger log = LoggerFactory.getLogger(RecordProcessor.class);
-        private final Object bean;
-        private final Method method;
+    private boolean isCrossAccountConfiguration(KinesisListener annotation) {
+        return annotation.targetAccountId() != null && !annotation.targetAccountId().trim().isEmpty();
+    }
 
-        public RecordProcessor(Object bean, Method method) {
-            this.bean = bean;
-            this.method = method;
+    private boolean isSchemaValidationConfiguration(KinesisListener annotation) {
+        return annotation.validateSchema() || kinesisProperties.getSchemaRegistry().isEnabled();
+    }
+
+    private AwsCredentialsProvider getCredentialsProvider(KinesisListener annotation) {
+        if (isCrossAccountConfiguration(annotation)) {
+            return crossAccountCredentialsService.getCredentialsForAccount(
+                    annotation.targetAccountId(),
+                    annotation.roleArn(),
+                    annotation.externalId(),
+                    annotation.sessionName()
+            );
+        } else {
+            // Use default credentials for same-account access
+            return software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create();
         }
+    }
 
-        @Override
-        public void initialize(InitializationInput initializationInput) {
-            log.info("Initializing record processor for shard: {}", initializationInput.shardId());
-        }
+    private String createOrGetEnhancedFanOutConsumer(String streamName, String consumerName, KinesisAsyncClient kinesisClient) {
+        try {
+            DescribeStreamConsumerRequest describeRequest = DescribeStreamConsumerRequest.builder()
+                    .streamARN(getStreamArn(streamName, kinesisClient))
+                    .consumerName(consumerName)
+                    .build();
 
-        @Override
-        public void processRecords(ProcessRecordsInput processRecordsInput) {
-            List<KinesisClientRecord> records = processRecordsInput.records();
+            try {
+                DescribeStreamConsumerResponse describeResponse = kinesisClient.describeStreamConsumer(describeRequest).get();
+                ConsumerDescription consumer = describeResponse.consumerDescription();
 
-            for (KinesisClientRecord record : records) {
-                try {
-                    // Convert record data to string (assuming JSON)
-                    String data = new String(record.data().array());
-
-                    // Invoke the listener method
-                    if (method.getParameterTypes().length == 1) {
-                        if (method.getParameterTypes()[0] == String.class) {
-                            method.invoke(bean, data);
-                        } else if (method.getParameterTypes()[0] == KinesisClientRecord.class) {
-                            method.invoke(bean, record);
-                        }
-                    } else if (method.getParameterTypes().length == 0) {
-                        method.invoke(bean);
-                    }
-
-                } catch (Exception e) {
-                    log.error("Error processing record: {}", record, e);
+                if (consumer.consumerStatus() == ConsumerStatus.ACTIVE) {
+                    log.info("Found existing active EFO consumer: {} for stream: {}", consumerName, streamName);
+                    return consumer.consumerARN();
+                } else {
+                    log.info("Found existing EFO consumer in {} state, waiting for ACTIVE...", consumer.consumerStatus());
+                    return waitForConsumerActive(consumer.consumerARN(), kinesisClient);
+                }
+            } catch (Exception e) {
+                if (kinesisProperties.getConsumer().getEnhancedFanOut().isAutoCreateConsumer()) {
+                    log.info("Creating new EFO consumer: {} for stream: {}", consumerName, streamName);
+                    return createEnhancedFanOutConsumer(streamName, consumerName, kinesisClient);
+                } else {
+                    throw new RuntimeException("EFO consumer does not exist and auto-creation is disabled", e);
                 }
             }
+        } catch (Exception e) {
+            log.error("Failed to create or get EFO consumer: {} for stream: {}", consumerName, streamName, e);
+            throw new RuntimeException("Failed to setup Enhanced Fan-Out consumer", e);
+        }
+    }
 
-            try {
-                processRecordsInput.checkpointer().checkpoint();
-            } catch (Exception e) {
-                log.error("Failed to checkpoint", e);
+    private String createEnhancedFanOutConsumer(String streamName, String consumerName, KinesisAsyncClient kinesisClient) {
+        try {
+            RegisterStreamConsumerRequest registerRequest = RegisterStreamConsumerRequest.builder()
+                    .streamARN(getStreamArn(streamName, kinesisClient))
+                    .consumerName(consumerName)
+                    .build();
+
+            RegisterStreamConsumerResponse registerResponse = kinesisClient.registerStreamConsumer(registerRequest).get();
+            String consumerArn = registerResponse.consumer().consumerARN();
+
+            log.info("Created EFO consumer: {} with ARN: {}", consumerName, consumerArn);
+            return waitForConsumerActive(consumerArn, kinesisClient);
+
+        } catch (Exception e) {
+            log.error("Failed to create EFO consumer: {}", consumerName, e);
+            throw new RuntimeException("Failed to create Enhanced Fan-Out consumer", e);
+        }
+    }
+
+    private String waitForConsumerActive(String consumerArn, KinesisAsyncClient kinesisClient) throws Exception {
+        int maxRetries = kinesisProperties.getConsumer().getEnhancedFanOut().getMaxSubscriptionRetries();
+        long backoffMillis = kinesisProperties.getConsumer().getEnhancedFanOut().getSubscriptionRetryBackoffMillis();
+
+        for (int i = 0; i < maxRetries; i++) {
+            DescribeStreamConsumerRequest describeRequest = DescribeStreamConsumerRequest.builder()
+                    .consumerARN(consumerArn)
+                    .build();
+
+            DescribeStreamConsumerResponse response = kinesisClient.describeStreamConsumer(describeRequest).get();
+            ConsumerStatus status = response.consumerDescription().consumerStatus();
+
+            if (status == ConsumerStatus.ACTIVE) {
+                log.info("EFO consumer is now ACTIVE: {}", consumerArn);
+                return consumerArn;
             }
+
+            log.info("EFO consumer status: {}, waiting... (attempt {}/{})", status, i + 1, maxRetries);
+            Thread.sleep(backoffMillis);
         }
 
-        @Override
-        public void leaseLost(LeaseLostInput leaseLostInput) {
-            log.info("Lease lost for shard: {}", leaseLostInput.toString());
-        }
+        throw new RuntimeException("EFO consumer did not become ACTIVE within timeout period");
+    }
 
-        @Override
-        public void shardEnded(ShardEndedInput shardEndedInput) {
-            try {
-                shardEndedInput.checkpointer().checkpoint();
-                log.info("Shard ended, checkpointed: {}", shardEndedInput.toString());
-            } catch (Exception e) {
-                log.error("Failed to checkpoint at shard end", e);
-            }
-        }
-
-        @Override
-        public void shutdownRequested(ShutdownRequestedInput shutdownRequestedInput) {
-
+    private String getStreamArn(String streamName, KinesisAsyncClient kinesisClient) {
+        try {
+            DescribeStreamRequest request = DescribeStreamRequest.builder()
+                    .streamName(streamName)
+                    .build();
+            DescribeStreamResponse response = kinesisClient.describeStream(request).get();
+            return response.streamDescription().streamARN();
+        } catch (Exception e) {
+            log.error("Failed to get stream ARN for: {}", streamName, e);
+            throw new RuntimeException("Failed to get stream ARN", e);
         }
     }
 
     @PreDestroy
     public void shutdown() {
         log.info("Shutting down Kinesis consumers...");
+
+        // Shutdown cross-account credentials service
+        crossAccountCredentialsService.shutdown();
+
+        // Shutdown schema registry service
+        schemaRegistryService.shutdown();
+
+        if (kinesisProperties.getConsumer().getEnhancedFanOut().isAutoCreateConsumer()) {
+            for (Map.Entry<String, String> entry : consumerArns.entrySet()) {
+                try {
+                    DeregisterStreamConsumerRequest deregisterRequest = DeregisterStreamConsumerRequest.builder()
+                            .consumerARN(entry.getValue())
+                            .build();
+                    kinesisClient.deregisterStreamConsumer(deregisterRequest).get();
+                    log.info("Deregistered EFO consumer: {}", entry.getKey());
+                } catch (Exception e) {
+                    log.warn("Failed to deregister EFO consumer: {}", entry.getKey(), e);
+                }
+            }
+        }
+
+        if (kinesisClient != null) {
+            kinesisClient.close();
+        }
+
         for (Map.Entry<String, Scheduler> entry : schedulers.entrySet()) {
             try {
                 Future<Boolean> gracefulShutdownFuture = entry.getValue().startGracefulShutdown();
@@ -215,4 +357,5 @@ public class KinesisConsumerManager {
         }
         executorService.shutdown();
     }
+
 }

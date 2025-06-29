@@ -1,10 +1,9 @@
-package com.csharma.kinesis;
+package com.csharma.kinesis.kinesistemplate;
 
 import com.csharma.kinesis.producer.*;
 import com.csharma.kinesis.prpoerties.KinesisProperties;
 import com.csharma.kinesis.serialization.DataSerializer;
 import com.csharma.kinesis.serialization.JsonDataSerializer;
-import com.csharma.kinesis.serialization.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
