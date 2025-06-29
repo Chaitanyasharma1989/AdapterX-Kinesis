@@ -1,7 +1,7 @@
 package com.csharma.kinesis.manager;
 
 import com.csharma.kinesis.listener.KinesisListener;
-import com.csharma.kinesis.prpoerties.KinesisProperties;
+import com.csharma.kinesis.configuration.KinesisProperties;
 import com.csharma.kinesis.recordprocessor.RecordProcessorFactory;
 import com.csharma.kinesis.service.CrossAccountCredentialsService;
 import com.csharma.kinesis.service.SchemaRegistryService;
@@ -76,28 +76,18 @@ public class KinesisConsumerManager {
 
     private void createConsumer(Object bean, Method method, KinesisListener annotation) {
         String streamName = annotation.streamName();
-        String applicationName = annotation.applicationName().isEmpty() ?
-                "kinesis-consumer-" + streamName : annotation.applicationName();
+        String applicationName = annotation.applicationName().isEmpty() ? "kinesis-consumer-" + streamName : annotation.applicationName();
         boolean useEFO = annotation.enhancedFanOut() || kinesisProperties.getConsumer().getEnhancedFanOut().isEnabled();
-
-        // Check if cross-account configuration is needed
         boolean isCrossAccount = isCrossAccountConfiguration(annotation);
-
-        // Check if schema validation is needed
         boolean isSchemaValidation = isSchemaValidationConfiguration(annotation);
-
         try {
             Region region = Region.of(kinesisProperties.getRegion());
-
-            // Get appropriate credentials for cross-account or same-account
             AwsCredentialsProvider credentialsProvider = getCredentialsProvider(annotation);
-
-            // Initialize schema registry service if needed
             if (isSchemaValidation) {
                 schemaRegistryService.initialize(credentialsProvider);
             }
 
-            // Create clients with appropriate credentials
+
             DynamoDbAsyncClient dynamoClient = DynamoDbAsyncClient.builder()
                     .region(region)
                     .credentialsProvider(credentialsProvider)
@@ -108,13 +98,11 @@ public class KinesisConsumerManager {
                     .credentialsProvider(credentialsProvider)
                     .build();
 
-            // Create Kinesis client for this specific consumer
             KinesisAsyncClient consumerKinesisClient = KinesisAsyncClient.builder()
                     .region(region)
                     .credentialsProvider(credentialsProvider)
                     .build();
 
-            // Create record processor factory with schema validation if enabled
             RecordProcessorFactory recordProcessorFactory = createRecordProcessorFactory(
                     bean, method, annotation, isSchemaValidation
             );
@@ -321,13 +309,8 @@ public class KinesisConsumerManager {
     @PreDestroy
     public void shutdown() {
         log.info("Shutting down Kinesis consumers...");
-
-        // Shutdown cross-account credentials service
         crossAccountCredentialsService.shutdown();
-
-        // Shutdown schema registry service
         schemaRegistryService.shutdown();
-
         if (kinesisProperties.getConsumer().getEnhancedFanOut().isAutoCreateConsumer()) {
             for (Map.Entry<String, String> entry : consumerArns.entrySet()) {
                 try {

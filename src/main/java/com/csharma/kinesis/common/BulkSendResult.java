@@ -1,4 +1,4 @@
-package com.csharma.kinesis.producer;
+package com.csharma.kinesis.common;
 
 
 import java.util.List;

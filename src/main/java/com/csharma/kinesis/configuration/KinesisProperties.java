@@ -1,6 +1,5 @@
-package com.csharma.kinesis.prpoerties;
+package com.csharma.kinesis.configuration;
 
-import com.csharma.kinesis.producer.ProducerConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 

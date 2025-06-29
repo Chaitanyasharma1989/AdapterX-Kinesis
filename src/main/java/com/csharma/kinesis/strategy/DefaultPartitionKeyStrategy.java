@@ -1,10 +1,9 @@
-package com.csharma.kinesis.producer;
+package com.csharma.kinesis.strategy;
+
+import com.csharma.kinesis.common.BulkRecord;
 
 import java.util.Objects;
 
-/**
- * Default partition key strategy: uses provided key or falls back to hash.
- */
 public class DefaultPartitionKeyStrategy implements PartitionKeyStrategy {
     @Override
     public String getPartitionKey(Object record) {

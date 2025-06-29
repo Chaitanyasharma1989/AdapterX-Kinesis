@@ -1,4 +1,4 @@
-package com.csharma.kinesis.producer;
+package com.csharma.kinesis.metrics;
 
 /**
  * Interface for collecting producer/consumer metrics.

@@ -1,4 +1,4 @@
-package com.csharma.kinesis.producer;
+package com.csharma.kinesis.metrics;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

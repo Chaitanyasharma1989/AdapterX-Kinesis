@@ -1,4 +1,4 @@
-package com.csharma.kinesis.producer;
+package com.csharma.kinesis.common;
 
 public class BulkRecord {
     private String partitionKey;
@@ -14,7 +14,6 @@ public class BulkRecord {
         this.data = data;
     }
 
-    // Getter methods
     public String getPartitionKey() {
         return partitionKey;
     }
@@ -22,8 +21,6 @@ public class BulkRecord {
     public Object getData() {
         return data;
     }
-
-    // Setter methods
     public void setPartitionKey(String partitionKey) {
         this.partitionKey = partitionKey;
     }

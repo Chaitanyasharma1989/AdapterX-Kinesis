@@ -2,7 +2,6 @@ package com.csharma.kinesis.configuration;
 
 import com.csharma.kinesis.manager.KinesisConsumerManager;
 import com.csharma.kinesis.kinesistemplate.KinesisTemplate;
-import com.csharma.kinesis.prpoerties.KinesisProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

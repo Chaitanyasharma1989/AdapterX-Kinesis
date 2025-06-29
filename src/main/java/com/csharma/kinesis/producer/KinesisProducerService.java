@@ -1,5 +1,9 @@
 package com.csharma.kinesis.producer;
 
+import com.csharma.kinesis.common.BulkRecord;
+import com.csharma.kinesis.common.BulkSendResult;
+import com.csharma.kinesis.common.SendResult;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

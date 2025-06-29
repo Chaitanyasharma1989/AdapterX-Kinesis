@@ -1,4 +1,4 @@
-package com.csharma.kinesis.producer;
+package com.csharma.kinesis.retry;
 
 
 public class ExponentialBackoffRetryPolicy implements RetryPolicy {
