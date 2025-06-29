@@ -4,24 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="904d3dcf-3232-4a38-8dbc-b59405abc779" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/easycode.ignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/easycode/codebase-v2.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/configuration/KinesisAutoConfiguration.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/kinesistemplate/KinesisTemplate.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/listener/EnableKinesis.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/listener/KinesisListener.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/manager/KinesisConsumerManager.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/prpoerties/KinesisProperties.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/recordprocessor/RecordProcessor.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/com/csharma/kinesis/recordprocessor/RecordProcessorFactory.java" afterDir="false" />
-    </list>
+    <list default="true" id="904d3dcf-3232-4a38-8dbc-b59405abc779" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -39,6 +22,12 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/Chaitanyasharma1989/AdapterX-Kinesis.git",
+    "accountId": "907d883b-b78e-4d76-a0f2-c37ecaf39936"
+  }
+}]]></component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 7
 }</component>

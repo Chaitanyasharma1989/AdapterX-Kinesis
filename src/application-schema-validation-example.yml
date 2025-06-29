@@ -1,0 +1,85 @@
+# Example configuration for Kinesis consumer with schema validation
+kinesis:
+  region: us-east-1
+  
+  # Schema Registry configuration
+  schemaRegistry:
+    enabled: true
+    registryName: "kinesis-schema-registry"
+    schemaName: "kinesis-schema"
+    schemaVersion: "1.0"
+    dataFormat: "JSON"  # JSON, AVRO, PROTOBUF
+    validateOnConsume: true
+    validateOnProduce: false
+    cacheSchemas: true
+    cacheSize: 1000
+    cacheExpirationMinutes: 60
+    failOnValidationError: true
+    logValidationErrors: true
+    compatibilityMode: "BACKWARD"  # BACKWARD, FORWARD, FULL, NONE
+    description: "Kinesis stream schema for data validation"
+  
+  # Cross-account configuration
+  crossAccount:
+    enabled: true
+    defaultTargetAccountId: "123456789012"
+    defaultRoleArn: "arn:aws:iam::123456789012:role/KinesisCrossAccountRole"
+    defaultExternalId: "unique-external-id-for-security"
+    defaultSessionName: "kinesis-cross-account-session"
+    sessionDurationSeconds: 3600
+    useDefaultCredentials: true
+    profileName: ""
+  
+  # Producer configuration
+  producer:
+    maxConnections: 24
+    requestTimeout: 6000
+    recordMaxBufferedTime: 100
+    recordTtl: 30000
+    aggregationEnabled: "true"
+    maxUserRecordsPerRequest: 500
+    maxUserRecordSizeBytes: 1048576
+  
+  # Consumer configuration with multi-threading support
+  consumer:
+    failoverTimeMillis: 10000
+    idleTimeBetweenReadsInMillis: 1000
+    maxRecords: 10000
+    shardSyncIntervalMillis: 60000
+    callProcessRecordsEvenForEmptyRecordList: false
+    initialPositionInStream: "LATEST"
+    
+    # Thread pool configuration for parallel record processing
+    threadPool:
+      size: 8
+      queueCapacity: 2000
+      shutdownTimeoutMs: 60000
+      recordProcessingTimeoutMs: 45000
+      activeTaskWaitTimeoutMs: 45000
+    
+    # Enhanced Fan-Out configuration
+    enhancedFanOut:
+      enabled: false
+      autoCreateConsumer: true
+      subscribeToShardTimeout: 30000
+      maxSubscriptionRetries: 3
+      subscriptionRetryBackoffMillis: 1000
+
+# Example application configuration
+spring:
+  application:
+    name: kinesis-schema-validation-consumer
+
+# Logging configuration for monitoring schema validation
+logging:
+  level:
+    com.csharma.kinesis.service.SchemaRegistryService: DEBUG
+    com.csharma.kinesis.recordprocessor: DEBUG
+    com.csharma.kinesis.manager: INFO
+    com.csharma.kinesis.service.CrossAccountCredentialsService: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# AWS configuration
+aws:
+  region: us-east-1 

@@ -1,0 +1,65 @@
+# Example configuration for multi-threaded Kinesis consumer
+kinesis:
+  region: us-east-1
+  
+  # Producer configuration
+  producer:
+    maxConnections: 24
+    requestTimeout: 6000
+    recordMaxBufferedTime: 100
+    recordTtl: 30000
+    aggregationEnabled: "true"
+    maxUserRecordsPerRequest: 500
+    maxUserRecordSizeBytes: 1048576
+  
+  # Consumer configuration with multi-threading support
+  consumer:
+    failoverTimeMillis: 10000
+    idleTimeBetweenReadsInMillis: 1000
+    maxRecords: 10000
+    shardSyncIntervalMillis: 60000
+    callProcessRecordsEvenForEmptyRecordList: false
+    initialPositionInStream: "LATEST"
+    
+    # Thread pool configuration for parallel record processing
+    threadPool:
+      # Number of threads for processing records in parallel
+      # Default: Runtime.getRuntime().availableProcessors()
+      size: 8
+      
+      # Maximum number of records that can be queued for processing
+      # Default: 1000
+      queueCapacity: 2000
+      
+      # Timeout for graceful shutdown of thread pool (milliseconds)
+      # Default: 30000 (30 seconds)
+      shutdownTimeoutMs: 60000
+      
+      # Timeout for processing a batch of records (milliseconds)
+      # Default: 30000 (30 seconds)
+      recordProcessingTimeoutMs: 45000
+      
+      # Timeout for waiting for active tasks to complete during shutdown (milliseconds)
+      # Default: 30000 (30 seconds)
+      activeTaskWaitTimeoutMs: 45000
+    
+    # Enhanced Fan-Out configuration
+    enhancedFanOut:
+      enabled: false
+      autoCreateConsumer: true
+      subscribeToShardTimeout: 30000
+      maxSubscriptionRetries: 3
+      subscriptionRetryBackoffMillis: 1000
+
+# Example application configuration
+spring:
+  application:
+    name: kinesis-multithreaded-consumer
+
+# Logging configuration for monitoring multi-threading
+logging:
+  level:
+    com.csharma.kinesis.recordprocessor: DEBUG
+    com.csharma.kinesis.manager: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n" 

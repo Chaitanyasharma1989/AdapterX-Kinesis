@@ -1,0 +1,70 @@
+# Example configuration for cross-account Kinesis consumer
+kinesis:
+  region: us-east-1
+  
+  # Cross-account configuration
+  crossAccount:
+    enabled: true
+    # Default values for cross-account access (can be overridden per listener)
+    defaultTargetAccountId: "123456789012"
+    defaultRoleArn: "arn:aws:iam::123456789012:role/KinesisCrossAccountRole"
+    defaultExternalId: "unique-external-id-for-security"
+    defaultSessionName: "kinesis-cross-account-session"
+    sessionDurationSeconds: 3600  # 1 hour
+    useDefaultCredentials: true   # Use default AWS credentials for role assumption
+    profileName: ""              # AWS profile name if not using default credentials
+  
+  # Producer configuration
+  producer:
+    maxConnections: 24
+    requestTimeout: 6000
+    recordMaxBufferedTime: 100
+    recordTtl: 30000
+    aggregationEnabled: "true"
+    maxUserRecordsPerRequest: 500
+    maxUserRecordSizeBytes: 1048576
+  
+  # Consumer configuration with multi-threading support
+  consumer:
+    failoverTimeMillis: 10000
+    idleTimeBetweenReadsInMillis: 1000
+    maxRecords: 10000
+    shardSyncIntervalMillis: 60000
+    callProcessRecordsEvenForEmptyRecordList: false
+    initialPositionInStream: "LATEST"
+    
+    # Thread pool configuration for parallel record processing
+    threadPool:
+      size: 8
+      queueCapacity: 2000
+      shutdownTimeoutMs: 60000
+      recordProcessingTimeoutMs: 45000
+      activeTaskWaitTimeoutMs: 45000
+    
+    # Enhanced Fan-Out configuration
+    enhancedFanOut:
+      enabled: false
+      autoCreateConsumer: true
+      subscribeToShardTimeout: 30000
+      maxSubscriptionRetries: 3
+      subscriptionRetryBackoffMillis: 1000
+
+# Example application configuration
+spring:
+  application:
+    name: kinesis-cross-account-consumer
+
+# Logging configuration for monitoring cross-account operations
+logging:
+  level:
+    com.csharma.kinesis.service.CrossAccountCredentialsService: DEBUG
+    com.csharma.kinesis.manager: INFO
+    com.csharma.kinesis.recordprocessor: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# AWS configuration (optional - for role assumption)
+aws:
+  region: us-east-1
+  # If using AWS profiles instead of default credentials
+  # profile: my-aws-profile 
