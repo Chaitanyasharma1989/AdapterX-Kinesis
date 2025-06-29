@@ -69,18 +69,6 @@ mvn test -Dtest=RecordProcessorTest#testMultiThreadedProcessing
 mvn test -Dtest=RecordProcessorTest -Dsurefire.useFile=false
 ```
 
-### Using Gradle
-```bash
-# Run all tests
-./gradlew test
-
-# Run specific test class
-./gradlew test --tests RecordProcessorTest
-
-# Run specific test method
-./gradlew test --tests RecordProcessorTest.testMultiThreadedProcessing
-```
-
 ### Programmatic Execution
 ```bash
 # Run the test runner directly
